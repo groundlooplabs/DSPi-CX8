@@ -42,7 +42,7 @@ jobs:
           git diff --stat
 
       - name: Add custom header
-        run: cp custom/custom/my_custom.h DSPi/firmware/DSPi/my_custom.h
+        run: cp custom/custom/es9081.h DSPi/firmware/DSPi/es9081.h
 
       - name: Install toolchain
         run: |
