@@ -1,0 +1,69 @@
+name: Build custom DSPi
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch of this fork to build"
+        required: true
+        default: "release/v1.1.6"
+      tag:
+        description: "Release tag (e.g. v1.1.6-cx8)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Firmware source: the chosen branch of your fork
+      - name: Checkout firmware
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          submodules: recursive
+          path: DSPi
+
+      # Your patch: always taken from the default branch
+      - name: Checkout custom patch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: custom
+          sparse-checkout: custom
+
+      - name: Apply patch to main.c
+        working-directory: DSPi
+        run: |
+          git apply --check ../custom/custom/main.patch
+          git apply ../custom/custom/main.patch
+          git diff --stat
+
+      - name: Add custom header
+        run: cp custom/custom/my_custom.h DSPi/firmware/DSPi/my_custom.h
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential python3 \
+            gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+
+      - name: Build RP2350
+        working-directory: DSPi
+        run: |
+          mkdir build-rp2350 && cd build-rp2350
+          cmake -DPICO_BOARD=pico2 -DPICO_EXTRAS_PATH=../firmware/pico-extras ../firmware
+          make -j"$(nproc)"
+
+      - name: Rename artifact
+        run: cp DSPi/build-rp2350/DSPi/DSPi.uf2 DSPi-rp2350-${{ inputs.tag }}.uf2
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: DSPi RP2350 ${{ inputs.tag }}
+          body: "Build of `${{ inputs.branch }}` with custom `main.c` patch."
+          files: DSPi-rp2350-${{ inputs.tag }}.uf2
